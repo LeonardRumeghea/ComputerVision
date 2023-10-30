@@ -59,10 +59,13 @@ def get_bounds(cluster):
 
 
 def dfs(skin_img, visited, x, y, cluster, color_code = 255):
+    
     visited[x][y] = 1
     cluster.append((x, y))
 
     # print(f'x: {x}, y: {y}, len: {len(cluster)}')
+
+    result = not (x - 1 < 0 or x + 1 >= skin_img.shape[0] or y - 1 < 0 or y + 1 >= skin_img.shape[1])
 
     if x - 1 >= 0 and not visited[x-1][y] and skin_img[x-1][y][0] == color_code:
         dfs(skin_img, visited, x-1, y, cluster, color_code)
@@ -76,29 +79,63 @@ def dfs(skin_img, visited, x, y, cluster, color_code = 255):
     if y + 1 < skin_img.shape[1] and not visited[x][y+1] and skin_img[x][y+1][0] == color_code:
         dfs(skin_img, visited, x, y+1, cluster, color_code)
 
+    return result
 
-def face_detector(img, skin_img, color_code = 255):
+
+def get_cluster_center(cluster):
+    x_sum = y_sum = 0
+
+    for x, y in cluster:
+        x_sum += x
+        y_sum += y
+
+    return (int(x_sum / len(cluster)), int(y_sum / len(cluster)))
+
+
+# get the centers of the clusters and determine the eye position
+def get_eyes_position(img, clusters):
+    eyes = []
+    clusters_centers = [get_cluster_center(cluster) for cluster in clusters]
+
+    height, width, _ = img.shape
+
+    for idx, (x, y) in enumerate(clusters_centers):
+        if (x < 0.5 * height and y < 0.5 * width):
+            for x1, y1 in clusters_centers[idx+1:]:
+                if (x1 < 0.5 * height and y1 > 0.5 * width):
+                    if abs(x - x1) < 0.1 * height and abs(y - y1) < 0.5 * width:
+                        eyes.append((x, y)) 
+                        eyes.append((x1, y1))
+                    
+    cv2.line(img, (0, height // 2), (width, height // 2), (0, 0, 255), 2)
+    cv2.line(img, (width // 2, 0), (width // 2, height), (0, 0, 255), 2)
+
+    for x, y in clusters_centers:
+        cv2.circle(img, (y, x), 3, (0, 255, 0), 2)
+
+    for x, y in eyes:
+        cv2.circle(img, (y, x), 3, (0, 0, 255), 2)
+    
+    return img
+                    
+
+
+
+
+def face_detector(img, skin_img):
 
     visited = np.zeros((img.shape[0], img.shape[1]), dtype=np.uint8)
     clusters = []
 
     for x in range(img.shape[0]):
         for y in range(img.shape[1]):
-            if skin_img[x][y][0] == 255 and visited[x][y] == 0:
+            if skin_img[x][y][0] == 0 and visited[x][y] == 0:
                 cluster = []
-                dfs(skin_img, visited, x, y, cluster, color_code)
+                result = dfs(skin_img, visited, x, y, cluster, 0)
+                if result:
+                    clusters.append(cluster)
 
-                clusters.append(cluster)
-
-    max_cluster = max(clusters, key=lambda cluster: len(cluster))
-
-    print(f'There are {len(clusters)} clusters and the biggest one has {len(max_cluster)} pixels')
-
-    x_min, x_max, y_min, y_max = get_bounds(max_cluster)
-
-    cv2.rectangle(img, (y_min, x_min), (y_max, x_max), (255, 0, 0), 2)
-
-    return img
+    return get_eyes_position(img, clusters)
 
 
 def main():
@@ -110,12 +147,16 @@ def main():
             img = cv2.resize(img, (int(img.shape[1] / 2), int(img.shape[0] / 2)))
 
         skin_img = skin_detector(cv2.GaussianBlur(img, (9, 9), 0))
-        result_img = face_detector(img.copy(), skin_img, 255)
-        result_opencv_img = face_detector_cv(img)
+        result_img = face_detector(img.copy(), skin_img)
+
+        # show_image(concat(img, result_img, 1))
+        show_image(concat(skin_img, result_img, 1))
+
+        # result_opencv_img = face_detector_cv(img)
 
         # show_image(result_img)
         # show_image(result_opencv_img)
-        show_image(concat(result_img, result_opencv_img, 1))
+        # show_image(concat(result_img, result_opencv_img, 1))
 
 if __name__ == '__main__':
     main()
