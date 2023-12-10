@@ -1,0 +1,4 @@
+# ignore test images and segmentation masks for lab 5 (too large)
+
+Laboratory 5/HAM10000_segmentations_lesion_tschandl
+Laboratory 5/HAM10000_images
